@@ -12,6 +12,30 @@
       font-family: Arial, sans-serif;
       overflow-x: hidden;
     }
+    #toolbar {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      padding: 10px 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    #toolbar button {
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: 0.3s;
+    }
+    #toolbar button:hover {
+      background: #0056b3;
+    }
     #pdf-container {
       display: flex;
       flex-direction: column;
@@ -65,13 +89,21 @@
   </style>
 </head>
 <body oncontextmenu="return false">
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button id="zoom-out">➖ Zoom Out</button>
+    <button id="zoom-in">➕ Zoom In</button>
+    <span id="zoom-level">100%</span>
+  </div>
+
   <div id="pdf-container"></div>
-  // <div id="loading" class="loading">Memuat halaman...</div>
+  <div id="loading" class="loading">Memuat halaman...</div>
   <div id="blackout"></div>
   <div id="warning-popup">🚫 Screenshot tidak diizinkan!</div>
 
   <script>
-    const url = "Update notes Akomodasi.pdf";
+    const url = "PMA Nomor 13 Tahun 2021 - Penyelenggaraan Ibadah Haji Reguler.pdf";
 
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -81,26 +113,34 @@
     const blackout = document.getElementById("blackout");
     const popup = document.getElementById("warning-popup");
 
+    const zoomLevelSpan = document.getElementById("zoom-level");
+    const zoomInBtn = document.getElementById("zoom-in");
+    const zoomOutBtn = document.getElementById("zoom-out");
+
     let pdfDoc = null;
     let currentPage = 1;
+    let scaleFactor = 1.0; // skala awal
     const batchSize = 2;
 
-    // Render setiap halaman
+    // Fungsi render halaman dengan kualitas tinggi
     function renderPage(pageNum) {
       return pdfDoc.getPage(pageNum).then(page => {
         const baseViewport = page.getViewport({ scale: 1 });
-        const desiredWidth = Math.min(window.innerWidth * 0.95, 800);
-        const qualityFactor = window.devicePixelRatio || 2;
-        const scale = (desiredWidth * qualityFactor) / baseViewport.width;
+        const desiredWidth = Math.min(window.innerWidth * 0.95, 1000);
+        const deviceScale = window.devicePixelRatio || 1;
+        const scale = (desiredWidth * deviceScale * 1.5 * scaleFactor) / baseViewport.width;
         const viewport = page.getViewport({ scale });
 
         const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { alpha: false });
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        canvas.style.width = desiredWidth + "px";
-        canvas.style.height = (viewport.height / qualityFactor) + "px";
+        canvas.style.width = desiredWidth * scaleFactor + "px";
+        canvas.style.height = (viewport.height / deviceScale / 1.5) * scaleFactor + "px";
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
 
         container.appendChild(canvas);
 
@@ -163,14 +203,34 @@
       }
     });
 
-    // Deteksi jika user mencoba capture lewat API (beberapa browser Android)
+    // Deteksi overlay screen recorder
     let visibilityTimer;
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
-        // kemungkinan user buka overlay screen recorder / screenshot
         visibilityTimer = setTimeout(triggerBlackout, 300);
       } else {
         clearTimeout(visibilityTimer);
+      }
+    });
+
+    // ====== 🔍 ZOOM CONTROL ======
+    function rerenderAll() {
+      // Hapus semua canvas & render ulang
+      container.innerHTML = "";
+      currentPage = 1;
+      renderBatch();
+      zoomLevelSpan.textContent = Math.round(scaleFactor * 100) + "%";
+    }
+
+    zoomInBtn.addEventListener("click", () => {
+      scaleFactor += 0.2;
+      rerenderAll();
+    });
+
+    zoomOutBtn.addEventListener("click", () => {
+      if (scaleFactor > 0.4) {
+        scaleFactor -= 0.2;
+        rerenderAll();
       }
     });
   </script>
