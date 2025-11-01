@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Viewer eBook Aman</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #f0f0f0;
+      font-family: Arial, sans-serif;
+      overflow-x: hidden;
+    }
+    #pdf-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+    }
+    canvas {
+      margin-bottom: 16px;
+      border: 1px solid #ccc;
+      background-color: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }
+    .loading {
+      text-align: center;
+      color: #666;
+      margin: 20px;
+      font-size: 14px;
+    }
+    /* Overlay hitam penuh */
+    #blackout {
+      position: fixed;
+      inset: 0;
+      background: black;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #blackout.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    /* Popup peringatan */
+    #warning-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      color: #222;
+      padding: 20px 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      font-size: 16px;
+      display: none;
+      z-index: 10000;
+    }
+  </style>
+</head>
+<body oncontextmenu="return false">
+  <div id="pdf-container"></div>
+  // <div id="loading" class="loading">Memuat halaman...</div>
+  <div id="blackout"></div>
+  <div id="warning-popup">🚫 Screenshot tidak diizinkan!</div>
+
+  <script>
+    const url = "Update notes Akomodasi.pdf";
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const container = document.getElementById("pdf-container");
+    const loadingDiv = document.getElementById("loading");
+    const blackout = document.getElementById("blackout");
+    const popup = document.getElementById("warning-popup");
+
+    let pdfDoc = null;
+    let currentPage = 1;
+    const batchSize = 2;
+
+    // Render setiap halaman
+    function renderPage(pageNum) {
+      return pdfDoc.getPage(pageNum).then(page => {
+        const baseViewport = page.getViewport({ scale: 1 });
+        const desiredWidth = Math.min(window.innerWidth * 0.95, 800);
+        const qualityFactor = window.devicePixelRatio || 2;
+        const scale = (desiredWidth * qualityFactor) / baseViewport.width;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = desiredWidth + "px";
+        canvas.style.height = (viewport.height / qualityFactor) + "px";
+
+        container.appendChild(canvas);
+
+        return page.render({ canvasContext: ctx, viewport }).promise;
+      });
+    }
+
+    async function renderBatch() {
+      if (!pdfDoc) return;
+      loadingDiv.style.display = "block";
+      const endPage = Math.min(currentPage + batchSize - 1, pdfDoc.numPages);
+
+      for (let i = currentPage; i <= endPage; i++) {
+        await renderPage(i);
+      }
+      currentPage = endPage + 1;
+
+      if (currentPage > pdfDoc.numPages) {
+        loadingDiv.textContent = "✅ Semua halaman selesai dimuat.";
+      } else {
+        loadingDiv.textContent = "⬇️ Scroll ke bawah untuk lanjut...";
+      }
+    }
+
+    pdfjsLib.getDocument(url).promise.then(pdf => {
+      pdfDoc = pdf;
+      renderBatch();
+    });
+
+    // Infinite scroll
+    window.addEventListener("scroll", () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+        if (currentPage <= pdfDoc.numPages) renderBatch();
+      }
+    });
+
+    // Fungsi blackout dan popup
+    function triggerBlackout() {
+      blackout.classList.add("active");
+      popup.style.display = "block";
+      setTimeout(() => {
+        blackout.classList.remove("active");
+        popup.style.display = "none";
+      }, 5000);
+    }
+
+    // Blokir shortcut umum + deteksi PrintScreen
+    document.addEventListener("keydown", e => {
+      const key = e.key.toLowerCase();
+      if (
+        (e.ctrlKey && ["s","p","u","c","x","a"].includes(key)) ||
+        ["f12"].includes(key)
+      ) {
+        e.preventDefault();
+        alert("Aksi ini tidak diizinkan.");
+      }
+      if (key === "printscreen") {
+        e.preventDefault();
+        triggerBlackout();
+      }
+    });
+
+    // Deteksi jika user mencoba capture lewat API (beberapa browser Android)
+    let visibilityTimer;
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        // kemungkinan user buka overlay screen recorder / screenshot
+        visibilityTimer = setTimeout(triggerBlackout, 300);
+      } else {
+        clearTimeout(visibilityTimer);
+      }
+    });
+  </script>
+</body>
+</html>
