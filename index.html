@@ -2,13 +2,13 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Viewer eBook</title>
+  <title>Viewer eBook Aman</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     body {
       margin: 0;
-      background: #f4f4f4;
+      background: #f0f0f0;
       font-family: Arial, sans-serif;
       overflow-x: hidden;
     }
@@ -16,112 +16,181 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 16px;
+      padding: 12px;
     }
     canvas {
-      margin-bottom: 20px;
-      border-radius: 8px;
-      background: white;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      width: 95%;
-      max-width: 900px;
+      margin-bottom: 16px;
+      border: 1px solid #ccc;
+      background-color: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      max-width: 100%;
       height: auto;
+      border-radius: 6px;
     }
-    #loading {
+    .loading {
       text-align: center;
-      color: #555;
+      color: #666;
       margin: 20px;
+      font-size: 14px;
     }
+    /* Overlay hitam penuh */
     #blackout {
       position: fixed;
       inset: 0;
       background: black;
+      z-index: 9999;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.3s ease;
-      z-index: 9999;
     }
     #blackout.active {
       opacity: 1;
       pointer-events: all;
     }
+    /* Popup peringatan */
     #warning-popup {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       background: white;
+      color: #222;
       padding: 20px 30px;
       border-radius: 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      font-size: 16px;
       display: none;
       z-index: 10000;
-      color: #222;
-      font-weight: bold;
     }
   </style>
 </head>
 <body oncontextmenu="return false">
   <div id="pdf-container"></div>
-  <div id="loading">📖 Sedang memuat eBook...</div>
+  <div id="loading" class="loading">Memuat halaman...</div>
   <div id="blackout"></div>
   <div id="warning-popup">🚫 Screenshot tidak diizinkan!</div>
 
   <script>
     const url = "PMA Nomor 13 Tahun 2021 - Penyelenggaraan Ibadah Haji Reguler.pdf";
+
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
     const container = document.getElementById("pdf-container");
-    const loading = document.getElementById("loading");
+    const loadingDiv = document.getElementById("loading");
     const blackout = document.getElementById("blackout");
     const popup = document.getElementById("warning-popup");
 
-    // Skala kecil biar ringan
-    const scale = 1.2;
     let pdfDoc = null;
+    let currentPage = 1;
+    const batchSize = 2;
+
+    // Render setiap halaman
+   function renderPage(pageNum) {
+  return pdfDoc.getPage(pageNum).then(page => {
+    // viewport awal
+    const baseViewport = page.getViewport({ scale: 1 });
+
+    // target lebar (menyesuaikan layar)
+    const desiredWidth = Math.min(window.innerWidth * 0.95, 1000);
+
+    // ambil faktor resolusi layar
+    const deviceScale = window.devicePixelRatio || 1;
+
+    // tingkatkan skala (2–3x untuk kualitas tinggi)
+    const scale = (desiredWidth * deviceScale * 1.5) / baseViewport.width;
+
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    // ukuran asli (untuk render tajam)
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    // tampilan visual di browser (lebih kecil agar efisien)
+    canvas.style.width = desiredWidth + "px";
+    canvas.style.height = (viewport.height / deviceScale / 1.5) + "px";
+
+    // aktifkan anti-aliasing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    container.appendChild(canvas);
+
+    const renderContext = {
+      canvasContext: ctx,
+      viewport: viewport,
+    };
+
+    return page.render(renderContext).promise;
+  });
+}
+
+    async function renderBatch() {
+      if (!pdfDoc) return;
+      loadingDiv.style.display = "block";
+      const endPage = Math.min(currentPage + batchSize - 1, pdfDoc.numPages);
+
+      for (let i = currentPage; i <= endPage; i++) {
+        await renderPage(i);
+      }
+      currentPage = endPage + 1;
+
+      if (currentPage > pdfDoc.numPages) {
+        loadingDiv.textContent = "✅ Semua halaman selesai dimuat.";
+      } else {
+        loadingDiv.textContent = "⬇️ Scroll ke bawah untuk lanjut...";
+      }
+    }
 
     pdfjsLib.getDocument(url).promise.then(pdf => {
       pdfDoc = pdf;
-      renderPages();
+      renderBatch();
     });
 
-    async function renderPages() {
-      loading.style.display = "block";
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const viewport = page.getViewport({ scale });
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        container.appendChild(canvas);
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
+    // Infinite scroll
+    window.addEventListener("scroll", () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+        if (currentPage <= pdfDoc.numPages) renderBatch();
       }
-      loading.style.display = "none";
-    }
+    });
 
-    // Proteksi keyboard & screenshot
+    // Fungsi blackout dan popup
     function triggerBlackout() {
       blackout.classList.add("active");
       popup.style.display = "block";
       setTimeout(() => {
         blackout.classList.remove("active");
         popup.style.display = "none";
-      }, 4000);
+      }, 5000);
     }
 
+    // Blokir shortcut umum + deteksi PrintScreen
     document.addEventListener("keydown", e => {
       const key = e.key.toLowerCase();
-      if ((e.ctrlKey && ["s","p","u","c","x","a"].includes(key)) || ["f12"].includes(key)) {
+      if (
+        (e.ctrlKey && ["s","p","u","c","x","a"].includes(key)) ||
+        ["f12"].includes(key)
+      ) {
         e.preventDefault();
         alert("Aksi ini tidak diizinkan.");
       }
       if (key === "printscreen") {
         e.preventDefault();
         triggerBlackout();
+      }
+    });
+
+    // Deteksi jika user mencoba capture lewat API (beberapa browser Android)
+    let visibilityTimer;
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        // kemungkinan user buka overlay screen recorder / screenshot
+        visibilityTimer = setTimeout(triggerBlackout, 300);
+      } else {
+        clearTimeout(visibilityTimer);
       }
     });
   </script>
