@@ -73,8 +73,8 @@
   <script>
     const url = "Update notes Akomodasi.pdf";
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
     const container = document.getElementById("pdf-container");
     const loadingDiv = document.getElementById("loading");
@@ -83,7 +83,7 @@
 
     let pdfDoc = null;
     let currentPage = 1;
-    const batchSize = 2;
+    const batchSize = 1;
 
     // Render setiap halaman
    function renderPage(pageNum) {
@@ -96,10 +96,7 @@
 
     // ambil faktor resolusi layar
     const deviceScale = window.devicePixelRatio || 1;
-
-    // tingkatkan skala (2–3x untuk kualitas tinggi)
-    const scale = (desiredWidth * deviceScale * 1.5) / baseViewport.width;
-
+    const scale = desiredWidth / baseViewport.width;
     const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement("canvas");
