@@ -57,7 +57,6 @@
       margin: 20px;
       font-size: 14px;
     }
-    /* Overlay hitam penuh */
     #blackout {
       position: fixed;
       inset: 0;
@@ -71,7 +70,6 @@
       opacity: 1;
       pointer-events: all;
     }
-    /* Popup peringatan */
     #warning-popup {
       position: fixed;
       top: 50%;
@@ -90,7 +88,6 @@
 </head>
 <body oncontextmenu="return false">
 
-  <!-- Toolbar -->
   <div id="toolbar">
     <button id="zoom-out">➖ Zoom Out</button>
     <button id="zoom-in">➕ Zoom In</button>
@@ -104,7 +101,6 @@
 
   <script>
     const url = "PMA Nomor 13 Tahun 2021 - Penyelenggaraan Ibadah Haji Reguler.pdf";
-
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
@@ -112,72 +108,58 @@
     const loadingDiv = document.getElementById("loading");
     const blackout = document.getElementById("blackout");
     const popup = document.getElementById("warning-popup");
-
     const zoomLevelSpan = document.getElementById("zoom-level");
-    const zoomInBtn = document.getElementById("zoom-in");
-    const zoomOutBtn = document.getElementById("zoom-out");
 
     let pdfDoc = null;
+    let scaleFactor = 1.5; // resolusi awal
     let currentPage = 1;
-    let scaleFactor = 1.0; // skala awal
-    const batchSize = 2;
 
-    // Fungsi render halaman dengan kualitas tinggi
-    function renderPage(pageNum) {
-      return pdfDoc.getPage(pageNum).then(page => {
-        const baseViewport = page.getViewport({ scale: 1 });
-        const desiredWidth = Math.min(window.innerWidth * 0.95, 1000);
-        const deviceScale = window.devicePixelRatio || 1;
-        const scale = (desiredWidth * deviceScale * 1.5 * scaleFactor) / baseViewport.width;
-        const viewport = page.getViewport({ scale });
+    async function renderAllPages() {
+      container.innerHTML = "";
+      loadingDiv.style.display = "block";
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: scaleFactor });
 
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { alpha: false });
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        canvas.style.width = desiredWidth * scaleFactor + "px";
-        canvas.style.height = (viewport.height / deviceScale / 1.5) * scaleFactor + "px";
-
+        canvas.style.width = "90%";
+        canvas.style.maxWidth = "1000px";
+        canvas.style.height = "auto";
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
 
         container.appendChild(canvas);
 
-        return page.render({ canvasContext: ctx, viewport }).promise;
-      });
-    }
-
-    async function renderBatch() {
-      if (!pdfDoc) return;
-      loadingDiv.style.display = "block";
-      const endPage = Math.min(currentPage + batchSize - 1, pdfDoc.numPages);
-
-      for (let i = currentPage; i <= endPage; i++) {
-        await renderPage(i);
+        await page.render({ canvasContext: ctx, viewport }).promise;
       }
-      currentPage = endPage + 1;
-
-      if (currentPage > pdfDoc.numPages) {
-        loadingDiv.textContent = "✅ Semua halaman selesai dimuat.";
-      } else {
-        loadingDiv.textContent = "⬇️ Scroll ke bawah untuk lanjut...";
-      }
+      loadingDiv.textContent = "✅ Semua halaman selesai dimuat.";
     }
 
     pdfjsLib.getDocument(url).promise.then(pdf => {
       pdfDoc = pdf;
-      renderBatch();
+      renderAllPages();
     });
 
-    // Infinite scroll
-    window.addEventListener("scroll", () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
-        if (currentPage <= pdfDoc.numPages) renderBatch();
+    // Zoom in/out dengan render ulang
+    document.getElementById("zoom-in").addEventListener("click", () => {
+      scaleFactor += 0.25;
+      zoomLevelSpan.textContent = Math.round(scaleFactor / 1.5 * 100) + "%";
+      renderAllPages();
+    });
+
+    document.getElementById("zoom-out").addEventListener("click", () => {
+      if (scaleFactor > 0.75) {
+        scaleFactor -= 0.25;
+        zoomLevelSpan.textContent = Math.round(scaleFactor / 1.5 * 100) + "%";
+        renderAllPages();
       }
     });
 
-    // Fungsi blackout dan popup
+    // Anti-screenshot
     function triggerBlackout() {
       blackout.classList.add("active");
       popup.style.display = "block";
@@ -187,50 +169,15 @@
       }, 5000);
     }
 
-    // Blokir shortcut umum + deteksi PrintScreen
     document.addEventListener("keydown", e => {
       const key = e.key.toLowerCase();
-      if (
-        (e.ctrlKey && ["s","p","u","c","x","a"].includes(key)) ||
-        ["f12"].includes(key)
-      ) {
+      if ((e.ctrlKey && ["s","p","u","c","x","a"].includes(key)) || ["f12"].includes(key)) {
         e.preventDefault();
         alert("Aksi ini tidak diizinkan.");
       }
       if (key === "printscreen") {
         e.preventDefault();
         triggerBlackout();
-      }
-    });
-
-    // Deteksi overlay screen recorder
-    let visibilityTimer;
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        visibilityTimer = setTimeout(triggerBlackout, 300);
-      } else {
-        clearTimeout(visibilityTimer);
-      }
-    });
-
-    // ====== 🔍 ZOOM CONTROL ======
-    function rerenderAll() {
-      // Hapus semua canvas & render ulang
-      container.innerHTML = "";
-      currentPage = 1;
-      renderBatch();
-      zoomLevelSpan.textContent = Math.round(scaleFactor * 100) + "%";
-    }
-
-    zoomInBtn.addEventListener("click", () => {
-      scaleFactor += 0.2;
-      rerenderAll();
-    });
-
-    zoomOutBtn.addEventListener("click", () => {
-      if (scaleFactor > 0.4) {
-        scaleFactor -= 0.2;
-        rerenderAll();
       }
     });
   </script>
