@@ -138,21 +138,6 @@
       renderAllPages();
     });
 
-    // Zoom in/out dengan render ulang
-    document.getElementById("zoom-in").addEventListener("click", () => {
-      scaleFactor += 0.25;
-      zoomLevelSpan.textContent = Math.round(scaleFactor / 1.5 * 100) + "%";
-      renderAllPages();
-    });
-
-    document.getElementById("zoom-out").addEventListener("click", () => {
-      if (scaleFactor > 0.75) {
-        scaleFactor -= 0.25;
-        zoomLevelSpan.textContent = Math.round(scaleFactor / 1.5 * 100) + "%";
-        renderAllPages();
-      }
-    });
-
     // Anti-screenshot
     function triggerBlackout() {
       blackout.classList.add("active");
