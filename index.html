@@ -10,22 +10,23 @@
       margin: 0;
       background: #f0f0f0;
       font-family: Arial, sans-serif;
-      overflow-x: hidden;
+      overflow-x: auto; /* ✅ aktifkan horizontal scroll */
     }
     #pdf-container {
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 12px;
+      width: fit-content; /* ✅ agar bisa melebar saat di-zoom */
+      margin: 0 auto;
     }
     canvas {
       margin-bottom: 16px;
       border: 1px solid #ccc;
       background-color: white;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      max-width: 100%;
-      height: auto;
       border-radius: 6px;
+      transition: transform 0.3s ease;
     }
     .loading {
       text-align: center;
@@ -33,7 +34,6 @@
       margin: 20px;
       font-size: 14px;
     }
-    /* Overlay hitam penuh */
     #blackout {
       position: fixed;
       inset: 0;
@@ -47,7 +47,6 @@
       opacity: 1;
       pointer-events: all;
     }
-    /* Popup peringatan */
     #warning-popup {
       position: fixed;
       top: 50%;
@@ -85,48 +84,32 @@
     let currentPage = 1;
     const batchSize = 2;
 
-    // Render setiap halaman
-   function renderPage(pageNum) {
-  return pdfDoc.getPage(pageNum).then(page => {
-    // viewport awal
-    const baseViewport = page.getViewport({ scale: 1 });
+    function renderPage(pageNum, scaleFactor = 1.5) {
+      return pdfDoc.getPage(pageNum).then(page => {
+        const baseViewport = page.getViewport({ scale: 1 });
+        const desiredWidth = Math.min(window.innerWidth * 0.95, 1000);
+        const deviceScale = window.devicePixelRatio || 1;
+        const scale = (desiredWidth * deviceScale * scaleFactor) / baseViewport.width;
+        const viewport = page.getViewport({ scale });
 
-    // target lebar (menyesuaikan layar)
-    const desiredWidth = Math.min(window.innerWidth * 0.95, 1000);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { alpha: false });
 
-    // ambil faktor resolusi layar
-    const deviceScale = window.devicePixelRatio || 1;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
 
-    // tingkatkan skala (2–3x untuk kualitas tinggi)
-    const scale = (desiredWidth * deviceScale * 1.5) / baseViewport.width;
+        canvas.style.width = viewport.width / deviceScale + "px";
+        canvas.style.height = viewport.height / deviceScale + "px";
 
-    const viewport = page.getViewport({ scale });
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
 
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { alpha: false });
+        container.appendChild(canvas);
 
-    // ukuran asli (untuk render tajam)
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    // tampilan visual di browser (lebih kecil agar efisien)
-    canvas.style.width = desiredWidth + "px";
-    canvas.style.height = (viewport.height / deviceScale / 1.5) + "px";
-
-    // aktifkan anti-aliasing
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    container.appendChild(canvas);
-
-    const renderContext = {
-      canvasContext: ctx,
-      viewport: viewport,
-    };
-
-    return page.render(renderContext).promise;
-  });
-}
+        const renderContext = { canvasContext: ctx, viewport: viewport };
+        return page.render(renderContext).promise;
+      });
+    }
 
     async function renderBatch() {
       if (!pdfDoc) return;
@@ -137,12 +120,8 @@
         await renderPage(i);
       }
       currentPage = endPage + 1;
-
-      if (currentPage > pdfDoc.numPages) {
-        loadingDiv.textContent = "✅ Semua halaman selesai dimuat.";
-      } else {
-        loadingDiv.textContent = "⬇️ Scroll ke bawah untuk lanjut...";
-      }
+      loadingDiv.textContent =
+        currentPage > pdfDoc.numPages ? "✅ Semua halaman selesai dimuat." : "⬇️ Scroll ke bawah untuk lanjut...";
     }
 
     pdfjsLib.getDocument(url).promise.then(pdf => {
@@ -150,14 +129,12 @@
       renderBatch();
     });
 
-    // Infinite scroll
     window.addEventListener("scroll", () => {
       if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
         if (currentPage <= pdfDoc.numPages) renderBatch();
       }
     });
 
-    // Fungsi blackout dan popup
     function triggerBlackout() {
       blackout.classList.add("active");
       popup.style.display = "block";
@@ -167,13 +144,9 @@
       }, 5000);
     }
 
-    // Blokir shortcut umum + deteksi PrintScreen
     document.addEventListener("keydown", e => {
       const key = e.key.toLowerCase();
-      if (
-        (e.ctrlKey && ["s","p","u","c","x","a"].includes(key)) ||
-        ["f12"].includes(key)
-      ) {
+      if ((e.ctrlKey && ["s", "p", "u", "c", "x", "a"].includes(key)) || ["f12"].includes(key)) {
         e.preventDefault();
         alert("Aksi ini tidak diizinkan.");
       }
@@ -183,15 +156,10 @@
       }
     });
 
-    // Deteksi jika user mencoba capture lewat API (beberapa browser Android)
     let visibilityTimer;
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        // kemungkinan user buka overlay screen recorder / screenshot
-        visibilityTimer = setTimeout(triggerBlackout, 300);
-      } else {
-        clearTimeout(visibilityTimer);
-      }
+      if (document.hidden) visibilityTimer = setTimeout(triggerBlackout, 300);
+      else clearTimeout(visibilityTimer);
     });
   </script>
 </body>
