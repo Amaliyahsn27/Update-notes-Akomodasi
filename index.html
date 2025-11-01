@@ -6,34 +6,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
       background: #f0f0f0;
       font-family: Arial, sans-serif;
-      overflow-x: auto; /* ✅ aktifkan horizontal scroll */
+      overflow: auto; /* ✅ aktifkan scroll penuh */
+      height: 100%;
+      width: 100%;
     }
+
+    /* container utama melebar bebas */
     #pdf-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 12px;
-      width: fit-content; /* ✅ agar bisa melebar saat di-zoom */
-      margin: 0 auto;
+      display: block;
+      padding: 20px;
+      width: max-content; /* ✅ biar lebar sesuai konten */
+      margin: 0;
     }
+
+    /* canvas tampil natural */
     canvas {
-      margin-bottom: 16px;
+      display: block;
+      margin: 0 auto 20px auto; /* jarak antar halaman */
       border: 1px solid #ccc;
       background-color: white;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       border-radius: 6px;
-      transition: transform 0.3s ease;
     }
+
     .loading {
       text-align: center;
       color: #666;
       margin: 20px;
       font-size: 14px;
     }
+
+    /* Overlay hitam penuh */
     #blackout {
       position: fixed;
       inset: 0;
@@ -47,6 +55,8 @@
       opacity: 1;
       pointer-events: all;
     }
+
+    /* Popup peringatan */
     #warning-popup {
       position: fixed;
       top: 50%;
@@ -87,9 +97,8 @@
     function renderPage(pageNum, scaleFactor = 1.5) {
       return pdfDoc.getPage(pageNum).then(page => {
         const baseViewport = page.getViewport({ scale: 1 });
-        const desiredWidth = Math.min(window.innerWidth * 0.95, 1000);
         const deviceScale = window.devicePixelRatio || 1;
-        const scale = (desiredWidth * deviceScale * scaleFactor) / baseViewport.width;
+        const scale = (900 * deviceScale * scaleFactor) / baseViewport.width;
         const viewport = page.getViewport({ scale });
 
         const canvas = document.createElement("canvas");
@@ -98,6 +107,7 @@
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
+        // tampil natural tanpa batas tengah
         canvas.style.width = viewport.width / deviceScale + "px";
         canvas.style.height = viewport.height / deviceScale + "px";
 
@@ -105,7 +115,6 @@
         ctx.imageSmoothingQuality = "high";
 
         container.appendChild(canvas);
-
         const renderContext = { canvasContext: ctx, viewport: viewport };
         return page.render(renderContext).promise;
       });
@@ -146,21 +155,4 @@
 
     document.addEventListener("keydown", e => {
       const key = e.key.toLowerCase();
-      if ((e.ctrlKey && ["s", "p", "u", "c", "x", "a"].includes(key)) || ["f12"].includes(key)) {
-        e.preventDefault();
-        alert("Aksi ini tidak diizinkan.");
-      }
-      if (key === "printscreen") {
-        e.preventDefault();
-        triggerBlackout();
-      }
-    });
-
-    let visibilityTimer;
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) visibilityTimer = setTimeout(triggerBlackout, 300);
-      else clearTimeout(visibilityTimer);
-    });
-  </script>
-</body>
-</html>
+      if ((e.ctrlKey && ["s", "p", "u", "c", "x", "a"].includes(key)) || ["]()
